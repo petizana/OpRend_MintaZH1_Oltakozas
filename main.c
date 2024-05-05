@@ -27,6 +27,13 @@ int main(int argc, char **argv)
     int status;
     signal(SIGTERM, handler);
     int pipefd[2];
+    int p;
+
+    if (pipe(pipefd) == -1)
+    {
+        perror("Hiba a pipe nyitaskor!");
+        exit(EXIT_FAILURE);
+    }
 
     pid_t ursula = fork();
     if (ursula < 0)
@@ -56,12 +63,32 @@ int main(int argc, char **argv)
             }
             int patients = atoi(argv[1]);
             printf("Currently there are %d patients waiting in queue!", patients);
+            int patientsForUrsula = patients / 2;
+            int patientsForCsormester;
+            if (patients % 2 == 1)
+                patientsForCsormester = patients / 2 + 1;
+            else
+                patientsForCsormester = patients / 2;
+            close(pipefd[0]);
+            write(pipefd[1], &patientsForUrsula, sizeof(int)); // this one is for Ursula
+            write(pipefd[1], &patientsForCsormester, sizeof(int)); // this one is for Csőrmester
+            close(pipefd[1]);
+            printf("Patients number has been sent to children!");
+            fflush(NULL);
+            wait(NULL);
         }
         else // csormester process
         {
             printf("Csőrmester waits 3 seconds, then send a SIGTERM %i signal\n", SIGTERM);
             sleep(3);
             kill(getppid(), SIGTERM);
+
+            close(pipefd[1]);
+            printf("\nReading started\n");
+            read(pipefd[0], &p, sizeof(int));
+            printf("\nCsőrmester read the msg: %d", p);
+            printf("\n");
+            close(pipefd[0]);
         }
     }
     else // ursula process
@@ -69,6 +96,15 @@ int main(int argc, char **argv)
         printf("Ursula waits 3 seconds, then send a SIGTERM %i signal\n", SIGTERM);
         sleep(3);
         kill(getppid(), SIGTERM);
+
+        close(pipefd[1]);
+        printf("\nReading started\n");
+        read(pipefd[0], &p, sizeof(int));
+        printf("\nUrsula read the msg: %d", p);
+        printf("\n");
+        close(pipefd[0]);
     }
     return 0;
 }
+
+// 2: 56 perc maradt
